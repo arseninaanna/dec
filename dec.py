@@ -1,82 +1,75 @@
-from keras.models import Sequential
-from keras.layers import Dense
-import tensorflow as tf
+from sklearn.cluster import KMeans
+from scipy.spatial import distance
 import numpy as np
-from keras.initializers import RandomNormal
-from keras.optimizers import SGD
-from keras.layers import Dropout
+import math
+import utils
 
 
-def train_autoencoder(x):
-    std = 0.01
-    drop = 0.2
-    def_inp = 28 * 28
-    dim = [500, 500, 2000, 10]
-    lr = 0.1
-    batch_size = 256
-    pre_iter = 50000
-    ae_iter = 100000
+def get_centroids(x):
+    kmeans = KMeans(n_init=20)
+    kmeans.fit(x)
 
-    encoders = []  # e0, e1, e2, e3
-    decoders = []  # d3, d2, d1, d0
-    outputs = [x]  # x, e0x = e0(x), e1x = e1(e0x), e2x = e2(e1x), e3x = e3(e2x)
-
-    iters_per_epoch = int(len(x) / batch_size)
-    pt_epochs = max(int(pre_iter / iters_per_epoch), 1)
-    ae_epochs = max(int(ae_iter / iters_per_epoch), 1)
-
-    for i in range(len(dim)):
-        e_activ = 'linear' if i == (len(dim) - 1) else 'relu'
-        d_activ = 'linear' if i == 0 else 'relu'
-        input_size = def_inp if i == 0 else dim[i - 1]
-        input_shape = (input_size,)
-
-        enc_i = Dense(dim[i], activation=e_activ, bias_initializer='zeros', input_shape=input_shape,
-                      kernel_initializer=RandomNormal(mean=0.0, stddev=std, seed=None))
-        encoders.append(enc_i)
-
-        dec_i = Dense(input_size, activation=d_activ, bias_initializer='zeros',
-                      kernel_initializer=RandomNormal(mean=0.0, stddev=std, seed=None))
-        decoders.append(dec_i)
-
-        model = Sequential([
-            Dropout(drop, input_shape=input_shape),
-            encoders[i],
-            Dropout(drop),
-            decoders[i]
-        ])
-
-        model.compile(loss='mse', optimizer=SGD(lr=lr, decay=0, momentum=0.9))
-        out = model.fit(outputs[i], outputs[i], batch_size=batch_size, epochs=pt_epochs, verbose=1)
-        outputs.append(out)
-
-    autoencoder = Sequential()
-    for i in range(len(encoders)):
-        autoencoder.add(encoders[i])
-    for i in range(len(decoders) - 1, -1, -1):
-        autoencoder.add(decoders[i])
-
-    autoencoder.compile(loss='mse', optimizer=SGD(lr=lr, decay=0, momentum=0.9))
-    autoencoder.fit(x, x, batch_size=batch_size, epochs=ae_epochs)
-
-    return encoders
+    return kmeans.cluster_centers_
 
 
-def get_mnist(size=10000):
-    np.random.seed(1234)  # set seed for deterministic ordering
-    (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
-    x_all = np.concatenate((x_train, x_test), axis=0)
-    Y = np.concatenate((y_train, y_test), axis=0)
-    X = x_all.reshape(-1, x_all.shape[1] * x_all.shape[2])
+def soft_assignment(centroids, x):
+    q = np.zeros(len(x), len(centroids))
+    for i in range(len(x)):
+        for j in range(len(centroids)):
+            num = math.pow(1 + distance.euclidean(x[i], centroids[j]), -0.5)
+            den = 0
+            for k in range(len(centroids)):
+                den += math.pow(1 + distance.euclidean(x[i], centroids[k]), -0.5)
+            q[i][j] = num / den
+    return q
 
-    p = np.random.permutation(X.shape[0])
-    X = X[p].astype(np.float32) * 0.02
-    Y = Y[p]
-    return X[-size:], Y[-size:]
+
+def calculate_fj(q, i):
+    fj = 0
+    for k in range(len(q.T)):
+        fj += q[i][k]
+    return fj
+
+
+def p_stat(q):
+    p = np.zeros(len(q), len(q.T))
+    for i in range(len(p)):
+        for j in range(len(p.T)):
+            fj = calculate_fj(q, i)
+            num = math.pow(q[i][j], 2) / fj
+            den = 0
+            for k in range(len(q.T)):
+                den += math.pow(q[i][k], 2) / fj
+            p[i][j] = num / den
+    return p
+
+
+def calculate_kl(p, q):
+    kl = 0
+    for i in range(len(q)):
+        for j in range(len(q.T)):
+            kl += p[i][j] * math.log10(p[i][j] / q[i][j])
+    return kl
+
+
+def train_dec(encoder, x):
+    conv = 0.1
+    cur_conv = 1
+
+    while cur_conv > conv:
+        Z = encoder.predict(x)
+        centroids = get_centroids(Z)
+        q = soft_assignment(centroids, Z)
+        p = p_stat(q)
+        KL = calculate_kl(p, q)
+
+    return {}  # todo: complete
 
 
 if __name__ == '__main__':
-    X, Y = get_mnist()
+    X, Y = utils.get_mnist()
+    encoder = utils.load_model('encoder')
 
-    encoders = train_autoencoder(X)
-    print()
+    print("Data loaded")
+
+    dec_model = train_dec(encoder, X)
