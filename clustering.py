@@ -7,19 +7,17 @@ from sklearn.utils.linear_assignment_ import linear_assignment
 from sklearn.cluster import KMeans
 
 
-
 class Clustering(Layer):
-    def __init__(self, output_dim, input_dim=None, weights=None, **kwargs):
-        self.centroids = self.output_dim = output_dim
+    def __init__(self, output_dim, input_dim=None, weights=None, prediction=None, **kwargs):
+        self.output_dim = output_dim
         self.input_dim = input_dim
         self.initial_weights = weights
-        #self.input_spec = [InputSpec(ndim=2)]
+        self.initial_prediction = prediction
 
         if input_dim is not None:
             kwargs['input_shape'] = (input_dim,)
         super(Clustering, self).__init__(**kwargs)
 
-    # todo
     def build(self, input_shape):
         assert len(input_shape) == 2
         input_dim = input_shape[1]
@@ -31,9 +29,9 @@ class Clustering(Layer):
         super(Clustering, self).build(input_shape)
 
     def call(self, x, **kwargs):
-        #sess = K.get_session()
-        #q = soft_assignment(self.weights, K.eval(x))
-        #return q
+        # sess = K.get_session()
+        # q = soft_assignment(self.weights, K.eval(x))
+        # return q
         q = 1.0 / (1.0 + K.sqrt(K.sum(K.square(K.expand_dims(x, 1) - self.W), axis=2)) ** 2 / 1.0)
         q = q ** ((1.0 + 1.0) / 2.0)
         q = K.transpose(K.transpose(q) / K.sum(q, axis=1))
@@ -43,18 +41,21 @@ class Clustering(Layer):
         return input_shape[0], self.output_dim
 
     def get_config(self):
-        config = {'output_dim': self.output_dim,
-                  'input_dim': self.input_dim,
-                  'weights': self.initial_weights}
+        config = {
+            'output_dim': self.output_dim,
+            'input_dim': self.input_dim,
+            'weights': self.initial_weights
+        }
         base_config = super(Clustering, self).get_config()
+
         return dict(list(base_config.items()) + list(config.items()))
 
 
 def get_centroids(x, count=10):
     kmeans = KMeans(n_clusters=count, n_init=20)
-    kmeans.fit(x)
+    pred = kmeans.fit_predict(x)
 
-    return kmeans.cluster_centers_
+    return kmeans.cluster_centers_, pred
 
 
 def calculate_fj(q, j):
@@ -77,11 +78,10 @@ def p_stat(q):
     p = np.zeros((len(q), len(q.T)))
     for i in range(len(p)):
         for j in range(len(p.T)):
-            fj = calculate_fj(q, i)
-            num = math.pow(q[i][j], 2) / fj
+            num = math.pow(q[i][j], 2) / calculate_fj(q, i)
             den = 0
             for k in range(len(q.T)):
-                den += math.pow(q[i][k], 2) / fj  # here is a bug
+                den += math.pow(q[i][k], 2) / calculate_fj(q, k)
             p[i][j] = num / den
     return p
 
@@ -95,7 +95,10 @@ def calculate_kl(p, q):
 
 
 def labels_delta(l_old, l_new):
-    return (l_new == l_old).sum().astype(np.float32) / l_new.shape[0]
+    diff = l_new == l_old
+    diff_count = diff.sum().astype(np.float32)
+
+    return 1 - (diff_count / l_new.shape[0])
 
 
 # todo: rewrite

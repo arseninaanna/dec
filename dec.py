@@ -12,9 +12,9 @@ def get_model(encoder, x):
     momentum = 0.9
 
     output = encoder.predict(x)
-    centroids = cl.get_centroids(output, clusters)
+    centroids, prediction = cl.get_centroids(output, clusters)
 
-    clustering_layer = Clustering(clusters, weights=centroids, name='clustering')
+    clustering_layer = Clustering(clusters, weights=centroids, prediction=prediction, name='clustering')
     model = Sequential([
         encoder,
         clustering_layer
@@ -25,14 +25,33 @@ def get_model(encoder, x):
     return model
 
 
+def get_slice(x, batch_number, batches_count, batch_size):
+    step = batch_number % batches_count
+    start = step * batch_size
+    end = min((step + 1) * batch_size, x.shape[0])
+    idx = np.arange(x.shape[0])
+
+    return idx[start:end]
+
+
+def target_prediction(dec_model, x, idx=None):
+    if idx is not None:
+        x = x[idx]
+
+    q = dec_model.predict_on_batch(x)
+    p = cl.p_stat(q)
+
+    return p
+
+
 def train_stat(dec_model, x, prev_pred, y=None):
     q = dec_model.predict(x, verbose=0)
 
     y_pred = q.argmax(1)
-    delta = np.round(cl.labels_delta(prev_pred, y_pred) * 100, 5)
+    delta = cl.labels_delta(prev_pred, y_pred) * 100
     acc = None
     if y is not None:
-        acc = np.round(cl.cluster_acc(y, y_pred)[0], 5)
+        acc = cl.cluster_acc(y, y_pred)[0]
 
     return y_pred, delta, acc
 
@@ -42,32 +61,33 @@ def train_dec(dec_model, x, y=None):
     batch_size = 256
     check_interval = 32
 
-    old_pred = dec_model.get_layer('clustering').centroids
-    batches_count = int(np.ceil(x.shape[0] / batch_size))
+    size = x.shape[0]
+    old_pred = dec_model.get_layer('clustering').initial_prediction
+    batches_count = int(np.ceil(size / batch_size))
 
+    def current_slice():
+        return get_slice(x, batch_number, batches_count, batch_size)
+
+    p = np.zeros(size)
     batch_number = 0
     while True:
-        if (batch_number + 1) % check_interval == 0:
+        if batch_number % check_interval == 0:
             y_pred, delta, acc = train_stat(dec_model, x, old_pred, y)
             old_pred = y_pred
 
-            if acc is not None:
-                print('Iteration %d, Delta %d%%, Accuracy %d' % (batch_number, delta, acc))
-            else:
-                print('Iteration %d, Delta %d%%' % (batch_number, delta))
+            p = target_prediction(dec_model, x)
 
-            if delta <= threshold:
+            log = 'Iter %d, delta %.2f%%' % (batch_number, delta)
+            if acc is not None:
+                log += ', accuracy %.5f' % (acc)
+            print(log)
+
+            if batch_number != 0 and delta <= threshold:
                 return
 
-        step = batch_number % batches_count
-        start = step * batch_size
-        end = min((step + 1) * batch_size, x.shape[0])
-        slice = x[start:end]
-
-        q = dec_model.predict_on_batch(slice)
-        p = cl.p_stat(q)
-
-        loss = dec_model.train_on_batch(slice, p)
+        idx = current_slice()
+        # p = target_prediction(dec_model, x, idx)
+        loss = dec_model.train_on_batch(x[idx], p[idx])
 
         batch_number += 1
 
