@@ -14,7 +14,7 @@ def get_model(encoder, x):
     output = encoder.predict(x)
     centroids = cl.get_centroids(output, clusters)
 
-    clustering_layer = Clustering(n_clusters=clusters, weights=centroids, name='clustering')
+    clustering_layer = Clustering(clusters, weights=centroids, name='clustering')
     model = Sequential([
         encoder,
         clustering_layer
@@ -42,8 +42,8 @@ def train_dec(dec_model, x, y=None):
     batch_size = 256
     check_interval = 32
 
-    old_pred = dec_model.get_layer('clustering').get_weights()
-    batches_count = np.ceil(x.shape[0] / batch_size)
+    old_pred = dec_model.get_layer('clustering').centroids
+    batches_count = int(np.ceil(x.shape[0] / batch_size))
 
     batch_number = 0
     while True:
@@ -62,10 +62,12 @@ def train_dec(dec_model, x, y=None):
         step = batch_number % batches_count
         start = step * batch_size
         end = min((step + 1) * batch_size, x.shape[0])
+        slice = x[start:end]
 
-        q = dec_model.predict_on_batch(x[start:end])
+        q = dec_model.predict_on_batch(slice)
         p = cl.p_stat(q)
-        loss = dec_model.train_on_batch(q, p)
+
+        loss = dec_model.train_on_batch(slice, p)
 
         batch_number += 1
 
@@ -84,7 +86,7 @@ if __name__ == '__main__':
         dec_model = get_model(encoder, X)
 
         print('Training DEC')
-        train_dec(dec_model, X)
+        train_dec(dec_model, X, Y)
 
         print('Saving DEC')
         utils.save_model('dec', dec_model)

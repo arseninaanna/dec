@@ -2,6 +2,8 @@ import tensorflow as tf
 import numpy as np
 import pickle
 import os.path as path
+from clustering import Clustering
+import keras.models
 
 
 def get_mnist(size=None):
@@ -23,15 +25,25 @@ def get_mnist(size=None):
 
 
 def load_model(name):
-    filepath = 'models/' + name + '.p'
+    filepath_1 = 'models/' + name + '.p'
+    filepath_2 = 'models/' + name + '.h5'
 
-    if path.exists(filepath):
-        with open('models/' + name + '.p', 'rb') as fp:
+    if path.exists(filepath_1):
+        with open(filepath_1, 'rb') as fp:
             return pickle.load(fp)
+
+    if path.exists(filepath_2):
+        return keras.models.load_model(filepath_2, custom_objects={'Clustering': Clustering})
 
     raise EnvironmentError('Pretrained model ' + name + ' not found')
 
 
-def save_model(name, model):
-    with open('models/' + name + '.p', 'wb') as wf:
-        pickle.dump(model, wf, protocol=pickle.HIGHEST_PROTOCOL)
+def save_model(name, model, mode=2):
+    if mode == 1:
+        filepath = 'models/' + name + '.p'
+        with open(filepath, 'wb') as wf:
+            pickle.dump(model, wf, protocol=pickle.HIGHEST_PROTOCOL)
+
+    if mode == 2:
+        filepath = 'models/' + name + '.h5'
+        model.save(filepath)
