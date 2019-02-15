@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import pickle
+import os.path as path
 
 
 def get_mnist(size=None):
@@ -22,8 +23,13 @@ def get_mnist(size=None):
 
 
 def load_model(name):
-    with open('models/' + name + '.p', 'rb') as fp:
-        return pickle.load(fp)
+    filepath = 'models/' + name + '.p'
+
+    if path.exists(filepath):
+        with open('models/' + name + '.p', 'rb') as fp:
+            return pickle.load(fp)
+
+    raise EnvironmentError('Pretrained model ' + name + ' not found')
 
 
 def save_model(name, model):
