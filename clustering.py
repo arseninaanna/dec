@@ -3,6 +3,7 @@ import keras.backend as K
 import math
 import numpy as np
 from scipy.spatial import distance
+from sklearn.utils.linear_assignment_ import linear_assignment
 from sklearn.cluster import KMeans
 
 
@@ -43,11 +44,8 @@ def get_centroids(x, count=10):
     return kmeans.cluster_centers_
 
 
-def calculate_fj(q, i):
-    fj = 0
-    for k in range(len(q.T)):
-        fj += q[i][k]
-    return fj
+def calculate_fj(q, j):
+    return np.sum(q[j])
 
 
 def soft_assignment(centroids, x):
@@ -70,7 +68,7 @@ def p_stat(q):
             num = math.pow(q[i][j], 2) / fj
             den = 0
             for k in range(len(q.T)):
-                den += math.pow(q[i][k], 2) / fj
+                den += math.pow(q[i][k], 2) / fj  # here is a bug
             p[i][j] = num / den
     return p
 
@@ -81,3 +79,18 @@ def calculate_kl(p, q):
         for j in range(len(q.T)):
             kl += p[i][j] * K.log(p[i][j] / q[i][j])
     return kl
+
+
+def labels_delta(l_old, l_new):
+    return (l_new == l_old).sum().astype(np.float32) / l_new.shape[0]
+
+
+# todo: rewrite
+def cluster_acc(y_true, y_pred):
+    assert y_pred.size == y_true.size
+    D = max(y_pred.max(), y_true.max())+1
+    w = np.zeros((D, D), dtype=np.int64)
+    for i in range(y_pred.size):
+        w[y_pred[i], y_true[i]] += 1
+    ind = linear_assignment(w.max() - w)
+    return sum([w[i, j] for i, j in ind])*1.0/y_pred.size, w
