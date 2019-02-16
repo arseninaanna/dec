@@ -111,7 +111,7 @@ if __name__ == '__main__':
         train_dec(dec_model, X, Y)
 
         print('Saving DEC')
-        #utils.save_model('dec', dec_model)
+        utils.save_model('dec', dec_model)
 
     q = dec_model.predict(X, verbose=0)
     y_pred = q.argmax(1)

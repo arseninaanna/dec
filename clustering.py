@@ -1,9 +1,7 @@
 from keras.engine.topology import Layer, InputSpec
 import keras.backend as K
 import keras.losses
-import math
 import numpy as np
-from scipy.spatial import distance
 from sklearn.utils.linear_assignment_ import linear_assignment
 from sklearn.cluster import KMeans
 
@@ -30,13 +28,7 @@ class Clustering(Layer):
         super(Clustering, self).build(input_shape)
 
     def call(self, x, **kwargs):
-        # sess = K.get_session()
-        # q = soft_assignment(self.weights, K.eval(x))
-        # return q
-        q = 1.0 / (1.0 + K.sqrt(K.sum(K.square(K.expand_dims(x, 1) - self.W), axis=2)) ** 2 / 1.0)
-        q = q ** ((1.0 + 1.0) / 2.0)
-        q = K.transpose(K.transpose(q) / K.sum(q, axis=1))
-        return q
+        return soft_assignment(x, self.W)
 
     def compute_output_shape(self, input_shape):
         return input_shape[0], self.output_dim
@@ -61,15 +53,19 @@ def get_centroids(x, count=10):
 
 
 # DEC actual predictor
-def soft_assignment(centroids, x):
-    q = np.zeros(len(x), len(centroids))
-    for i in range(len(x)):
-        for j in range(len(centroids)):
-            num = math.pow(1 + distance.euclidean(x[i], centroids[j]), -0.5)
-            den = 0
-            for k in range(len(centroids)):
-                den += math.pow(1 + distance.euclidean(x[i], centroids[k]), -0.5)
-            q[i][j] = num / den
+def soft_assignment(x, centroids):
+    alpha = 1
+    power = -(alpha + 1 / 2)
+    x = K.expand_dims(x, 1)  # hack
+
+    # euclidean_distance
+    def eu_dist(z, u):
+        return K.sqrt(K.sum(K.square(z - u), axis=-1))
+
+    q = 1 + (eu_dist(x, centroids) ** 2) / alpha
+    q = q ** power
+    q = q / K.sum(q, axis=1, keepdims=True)
+
     return q
 
 
