@@ -4,6 +4,7 @@ import numpy as np
 from clustering import Clustering
 from keras.models import Sequential
 from keras.optimizers import SGD
+from sklearn.cluster import KMeans
 
 
 def get_model(encoder, x):
@@ -94,7 +95,7 @@ def train_dec(dec_model, x, y=None):
 
 
 if __name__ == '__main__':
-    X, Y = utils.get_mnist(5000)
+    X, Y = utils.get_mnist()
     print("MNIST loaded")
 
     encoder = utils.load_model('encoder')
@@ -110,6 +111,17 @@ if __name__ == '__main__':
         train_dec(dec_model, X, Y)
 
         print('Saving DEC')
-        utils.save_model('dec', dec_model)
+        #utils.save_model('dec', dec_model)
 
-    print()
+    q = dec_model.predict(X, verbose=0)
+    y_pred = q.argmax(1)
+    print("DEC accuracy: ", cl.cluster_acc(Y, y_pred)[0])
+
+    kmeans = KMeans(n_clusters=10, random_state=0).fit(X)
+    km_predicted = kmeans.predict(X)
+    print("KMeans accuracy: ", cl.cluster_acc(Y, km_predicted)[0])
+
+    output = encoder.predict(X)
+    kmeans = KMeans(n_clusters=10, random_state=0).fit(output)
+    predicted = kmeans.predict(output)
+    print("Encoder + kmeans accuracy: ", cl.cluster_acc(Y, predicted)[0])
