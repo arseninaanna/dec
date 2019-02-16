@@ -13,14 +13,15 @@ def get_model(encoder, x):
 
     output = encoder.predict(x)
     centroids, prediction = cl.get_centroids(output, clusters)
+    print("DEC: initial centroids found")
 
     clustering_layer = Clustering(clusters, weights=centroids, prediction=prediction, name='clustering')
     model = Sequential([
         encoder,
         clustering_layer
     ])
-    model.compile(loss='kullback_leibler_divergence', optimizer='adadelta')
-    # model.compile(loss=cl.calculate_kl, optimizer=SGD(lr=learning_rate, momentum=momentum))
+    # model.compile(loss='kullback_leibler_divergence', optimizer='adadelta')
+    model.compile(loss=cl.calculate_kl, optimizer=SGD(lr=learning_rate, momentum=momentum))
 
     return model
 

@@ -1,5 +1,6 @@
 from keras.engine.topology import Layer, InputSpec
 import keras.backend as K
+import keras.losses
 import math
 import numpy as np
 from scipy.spatial import distance
@@ -51,17 +52,15 @@ class Clustering(Layer):
         return dict(list(base_config.items()) + list(config.items()))
 
 
+# helps to initialize DEC
 def get_centroids(x, count=10):
-    kmeans = KMeans(n_clusters=count, n_init=20)
-    pred = kmeans.fit_predict(x)
+    km = KMeans(n_clusters=count, n_init=20)
+    pred = km.fit_predict(x)
 
-    return kmeans.cluster_centers_, pred
-
-
-def calculate_fj(q, j):
-    return np.sum(q[j])
+    return km.cluster_centers_, pred
 
 
+# DEC actual predictor
 def soft_assignment(centroids, x):
     q = np.zeros(len(x), len(centroids))
     for i in range(len(x)):
@@ -74,34 +73,36 @@ def soft_assignment(centroids, x):
     return q
 
 
+# DEC loss function
+def calculate_kl(p, q):
+    return K.sum(p * K.log(p / q), axis=-1)
+
+
+# calculates target values. this is our 'y_true'
 def p_stat(q):
-    p = np.zeros((len(q), len(q.T)))
-    for i in range(len(p)):
-        for j in range(len(p.T)):
-            num = math.pow(q[i][j], 2) / calculate_fj(q, i)
-            den = 0
-            for k in range(len(q.T)):
-                den += math.pow(q[i][k], 2) / calculate_fj(q, k)
-            p[i][j] = num / den
+    n, m = q.shape
+    q_square = np.power(q, 2)  # calculates q**2 for each element
+    fj_vector = np.sum(q, axis=0)  # calculates f() for each column
+
+    p = np.zeros((n, m))
+    for i in range(n):
+        num = q_square[i] / fj_vector
+        den = np.sum(q_square[i] / fj_vector)
+
+        p[i] = num / den
+
     return p
 
 
-def calculate_kl(p, q):
-    kl = 0
-    for i in range(len(q)):
-        for j in range(len(q.T)):
-            kl += p[i][j] * K.log(p[i][j] / q[i][j])
-    return kl
-
-
+# helps to detect training convergence
 def labels_delta(l_old, l_new):
-    diff = l_new == l_old
-    diff_count = diff.sum().astype(np.float32)
+    data_size = l_new.shape[0]
+    diff_count = np.sum(l_new == l_old)
 
-    return 1 - (diff_count / l_new.shape[0])
+    return 1 - (diff_count / data_size)
 
 
-# todo: rewrite
+# for metrics only
 def cluster_acc(y_true, y_pred):
     assert y_pred.size == y_true.size
     D = max(y_pred.max(), y_true.max()) + 1
@@ -110,3 +111,7 @@ def cluster_acc(y_true, y_pred):
         w[y_pred[i], y_true[i]] += 1
     ind = linear_assignment(w.max() - w)
     return sum([w[i, j] for i, j in ind]) * 1.0 / y_pred.size, w
+
+
+# workaround for keras loading bugs
+keras.losses.calculate_kl = calculate_kl
