@@ -76,6 +76,10 @@ def calculate_kl(p, q):
 
 # calculates target values. this is our 'y_true'
 def p_stat(q):
+    # p = q ** 2 / q.sum(axis=0)
+    # p = p / p.sum(axis=1, keepdims=True)
+    # return p
+
     n, m = q.shape
     q_square = np.power(q, 2)  # calculates q**2 for each element
     fj_vector = np.sum(q, axis=0)  # calculates f() for each column

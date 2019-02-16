@@ -77,7 +77,8 @@ def train_dec(dec_model, x, y=None):
             y_pred, delta, acc = train_stat(dec_model, x, old_pred, y)
             old_pred = y_pred
 
-            p = target_prediction(dec_model, x)
+            # greatly improves performance, but reduces training quality
+            # p = target_prediction(dec_model, x)
 
             log = 'Iter %d, delta %.2f%%' % (batch_number, delta)
             if acc is not None:
@@ -88,7 +89,7 @@ def train_dec(dec_model, x, y=None):
                 return
 
         idx = current_slice()
-        # p = target_prediction(dec_model, x, idx)
+        p = target_prediction(dec_model, x)
         loss = dec_model.train_on_batch(x[idx], p[idx])
 
         batch_number += 1
