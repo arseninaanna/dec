@@ -102,7 +102,7 @@ def labels_delta(l_old, l_new):
     return 1 - (diff_count / data_size)
 
 
-# for metrics only
+# for metrics only copied from official impl
 def cluster_acc(y_true, y_pred):
     assert y_pred.size == y_true.size
     D = max(y_pred.max(), y_true.max()) + 1

@@ -7,6 +7,7 @@ from keras.optimizers import SGD
 from sklearn.cluster import KMeans
 
 
+# combines encoder with clustering layer
 def get_model(encoder, x):
     clusters = 10
     learning_rate = 0.01
@@ -102,6 +103,7 @@ if __name__ == '__main__':
     encoder = utils.load_model('encoder')
     print("Encoder loaded")
 
+    fl = False
     try:
         dec_model = utils.load_model('dec')
         print('DEC loaded')
@@ -114,10 +116,17 @@ if __name__ == '__main__':
         print('Saving DEC')
         utils.save_model('dec', dec_model)
 
+        fl = True
+
+    # after training decoder encoder weights can be changed but we need original for KMeans
+    if fl:
+        encoder = utils.load_model('encoder')
+
     q = dec_model.predict(X, verbose=0)
     y_pred = q.argmax(1)
     print("DEC accuracy: ", cl.cluster_acc(Y, y_pred)[0])
 
+    # run it on server to speed up
     kmeans = KMeans(n_clusters=10, random_state=0).fit(X)
     km_predicted = kmeans.predict(X)
     print("KMeans accuracy: ", cl.cluster_acc(Y, km_predicted)[0])
